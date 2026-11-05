@@ -2,3 +2,9 @@
 	path = WolvenKit
 	url = https://github.com/WolvenKit/WolvenKit.git
 	branch = develop
+[submodule "native/kraken"]
+	path = native/kraken
+	url = https://github.com/WolvenKit/kraken.git
+[submodule "native/simde"]
+	path = native/simde
+	url = https://github.com/simd-everywhere/simde.git

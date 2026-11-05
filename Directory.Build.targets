@@ -1,0 +1,20 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'WolvenKit.Common' And $([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Remove="lib/DirectXTexNet.dll;lib/texconv.dll;lib/DirectXTexNetImpl.dll;lib/Ijwhost.dll" />
+  </ItemGroup>
+  <!-- The pinned WolvenKit ships an Intel-only dylib. Build its replacement
+       without modifying the upstream submodule. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'WolvenKit.Core' And $([MSBuild]::IsOSPlatform('OSX'))">
+    <Content Remove="lib/kraken.dll;lib/libkraken.so;lib/libkraken.dylib;lib/wwtools.dll;lib/libwwtools.so" />
+    <Content Include="$(MSBuildThisFileDirectory)artifacts/native/libkraken.dylib">
+      <Link>libkraken.dylib</Link>
+      <TargetPath>libkraken.dylib</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <Target Name="BuildMacKraken" BeforeTargets="PrepareForBuild"
+          Condition="'$(MSBuildProjectName)' == 'WolvenKit.Core' And $([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)scripts/build-kraken.sh&quot;" />
+  </Target>
+</Project>

@@ -1,0 +1,32 @@
+name: macOS
+on:
+  push:
+    branches: [macos]
+    tags: ['macos-v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test save reading and writing
+        run: dotnet run --project CyberCAT.SmokeTests -c Release -p:NuGetAudit=false
+      - name: Build self-contained app
+        run: bash scripts/build-macos.sh '${{ matrix.rid }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CyberCAT-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}/CyberCAT-${{ matrix.rid }}.zip
+          if-no-files-found: error

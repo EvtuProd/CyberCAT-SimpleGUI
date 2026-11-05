@@ -1,5 +1,7 @@
 # CyberCAT-SimpleGUI
 
+**macOS fork:** see [CyberCAT for macOS](README-macOS.md) for the native Mac app, features, build instructions and compatibility notes. The `macos` branch supports Apple Silicon and Intel.
+
 A simplified offshoot of SirBitesalot's CyberCAT.
 
 ## Features

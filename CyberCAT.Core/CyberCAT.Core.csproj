@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../WolvenKit/WolvenKit.RED4/WolvenKit.RED4.csproj" />
+    <ProjectReference Include="../WolvenKit/WolvenKit.Common/WolvenKit.Common.csproj" />
+    <Compile Include="../CP2077SaveEditor/ModSupport/**/*.cs" Exclude="../CP2077SaveEditor/ModSupport/EnhancedCraft/EnhancedCraftHelper.cs" Link="ModSupport/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../CP2077SaveEditor/Resources/*.json" LogicalName="GameData.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
