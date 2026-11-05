@@ -26,6 +26,7 @@ The header distinguishes a **Game save slot** from an **External copy** and show
 ## Features and scope
 
 - Player attributes, levels, skills and unspent attribute/perk/relic points.
+  Zero-valued point fields omitted by the game are restored when edited, with package offsets updated while preserving other fields.
 - All inventory containers, item search, quantities (including `Items.money`) and item flags.
 - Quest fact search and editing, including unknown numeric hashes and new fact names.
 - Vehicle garage unlocks.

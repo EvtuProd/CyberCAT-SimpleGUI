@@ -1,16 +1,51 @@
 using WolvenKit.RED4.Archive.IO;
 using WolvenKit.RED4.Types;
+using System.Buffers.Binary;
 
 namespace CyberCAT.Core;
 
 internal sealed class TrackingPackageReader(Stream input) : RedPackageReader(input)
 {
     public List<TrackedField> Fields { get; } = new();
+    public PackageLayout Layout { get; } = new();
+
+    public override EFileReadErrorCodes ReadBuffer(RedBuffer buffer)
+    {
+        var start = BaseStream.Position;
+        using (var reader = new BinaryReader(BaseStream, System.Text.Encoding.UTF8, true))
+        {
+            reader.ReadByte(); reader.ReadByte();
+            var sections = reader.ReadUInt16();
+            reader.ReadUInt32();
+            if (sections == 7) { reader.ReadUInt32(); reader.ReadUInt32(); }
+            reader.ReadUInt32(); reader.ReadUInt32();
+            var descriptors = reader.ReadUInt32();
+            var data = reader.ReadUInt32();
+            if (Settings.RedPackageType == WolvenKit.RED4.Archive.Buffer.RedPackageType.ScriptableSystem)
+            {
+                var count = reader.ReadUInt32();
+                BaseStream.Position += count * 8;
+            }
+            Layout.Base = checked((int)BaseStream.Position + 4);
+            BaseStream.Position += descriptors;
+            for (var i = 0; i < (data - descriptors) / 8; i++)
+            {
+                reader.ReadUInt32();
+                var offsetPosition = checked((int)BaseStream.Position + 4);
+                Layout.Chunks.Add((offsetPosition, checked(Layout.Base + (int)reader.ReadUInt32())));
+            }
+        }
+        BaseStream.Position = start;
+        var result = base.ReadBuffer(buffer);
+        Layout.UnspentName = _namesList.FindIndex(x => x.GetResolvedText() == "unspent");
+        Layout.Int32Name = _namesList.FindIndex(x => x.GetResolvedText() == "Int32");
+        return result;
+    }
 
     public override void ReadClass(RedBaseClass instance, uint size)
     {
         var start = BaseStream.Position;
-        var descriptors = new List<(string Name, string Type, int Offset)>();
+        var descriptors = new List<(string Name, string Type, int Offset, int Descriptor)>();
         using (var reader = new BinaryReader(BaseStream, System.Text.Encoding.UTF8, true))
         {
             var count = reader.ReadUInt16();
@@ -18,12 +53,18 @@ internal sealed class TrackingPackageReader(Stream input) : RedPackageReader(inp
             {
                 var name = GetStringValue(reader.ReadUInt16()).GetResolvedText()!;
                 var type = GetStringValue(reader.ReadUInt16()).GetResolvedText()!;
-                descriptors.Add((name, type, checked((int)(start + reader.ReadUInt32()))));
+                var descriptor = checked((int)BaseStream.Position + 4);
+                descriptors.Add((name, type, checked((int)(start + reader.ReadUInt32())), descriptor));
             }
         }
         BaseStream.Position = start;
         base.ReadClass(instance, size);
-        foreach (var (name, type, offset) in descriptors)
+        var layout = new ClassLayout(instance, checked((int)start + 4), checked((int)BaseStream.Position + 4),
+            descriptors.Select(x => (x.Descriptor, x.Offset + 4)).ToList());
+        Layout.Classes.Add(layout);
+        if (instance is SDevelopmentPoints && descriptors.All(x => x.Name != "unspent"))
+            Layout.MissingPoints.Add((layout, instance.GetProperty("unspent")!));
+        foreach (var (name, type, offset, _) in descriptors)
         {
             if (type is not ("Int32" or "Uint32" or "Float" or "Bool" or "DataBuffer")) continue;
             if (!instance.HasProperty(name) || instance.GetProperty(name) is not { } value) continue;
@@ -38,6 +79,58 @@ internal sealed class TrackingPackageReader(Stream input) : RedPackageReader(inp
             // Do not patch a field unless its exact original encoding is known.
             if (original.SequenceEqual(bytes)) Fields.Add(new(instance, name, offset + 4, value, bytes));
         }
+    }
+}
+
+internal sealed record ClassLayout(RedBaseClass Owner, int Start, int End, List<(int Descriptor, int Value)> Fields);
+
+internal sealed class PackageLayout
+{
+    public int Base;
+    public int UnspentName = -1;
+    public int Int32Name = -1;
+    public List<(int Descriptor, int Value)> Chunks { get; } = new();
+    public List<ClassLayout> Classes { get; } = new();
+    public List<(ClassLayout Class, IRedType Original)> MissingPoints { get; } = new();
+
+    public byte[] InsertPointFields(byte[] original, List<(ClassLayout Class, byte[] Bytes)> additions, List<(TrackedField Field, byte[] Bytes)> changes)
+    {
+        if (UnspentName < 0 || Int32Name < 0) throw new InvalidDataException("The save has no name entry for development points yet. Earn or spend a point in-game and save first.");
+        var inserts = new List<(int Position, byte[] Bytes)>();
+        foreach (var (cls, bytes) in additions)
+        {
+            inserts.Add((cls.Start + 2 + cls.Fields.Count * 8, new byte[8]));
+            inserts.Add((cls.End, bytes));
+        }
+        inserts = inserts.OrderBy(x => x.Position).ToList();
+        int Move(int position) => position + inserts.Where(x => x.Position <= position).Sum(x => x.Bytes.Length);
+        int InsertPosition(int position) => position + inserts.Where(x => x.Position < position).Sum(x => x.Bytes.Length);
+        using var stream = new MemoryStream();
+        var cursor = 0;
+        foreach (var (position, bytes) in inserts)
+        {
+            stream.Write(original, cursor, position - cursor);
+            stream.Write(bytes);
+            cursor = position;
+        }
+        stream.Write(original, cursor, original.Length - cursor);
+        var output = stream.ToArray();
+        foreach (var cls in Classes)
+            foreach (var (descriptor, value) in cls.Fields)
+                BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(Move(descriptor), 4), checked((uint)(Move(value) - Move(cls.Start))));
+        foreach (var (descriptor, value) in Chunks)
+            BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(Move(descriptor), 4), checked((uint)(Move(value) - Base)));
+        foreach (var (cls, _) in additions)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(output.AsSpan(Move(cls.Start), 2), checked((ushort)(cls.Fields.Count + 1)));
+            var descriptor = InsertPosition(cls.Start + 2 + cls.Fields.Count * 8);
+            BinaryPrimitives.WriteUInt16LittleEndian(output.AsSpan(descriptor, 2), checked((ushort)UnspentName));
+            BinaryPrimitives.WriteUInt16LittleEndian(output.AsSpan(descriptor + 2, 2), checked((ushort)Int32Name));
+            BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(descriptor + 4, 4), checked((uint)(InsertPosition(cls.End) - Move(cls.Start))));
+        }
+        foreach (var (field, bytes) in changes) bytes.CopyTo(output, Move(field.Offset));
+        BinaryPrimitives.WriteInt32LittleEndian(output, checked(BinaryPrimitives.ReadInt32LittleEndian(original) + output.Length - original.Length));
+        return output;
     }
 }
 

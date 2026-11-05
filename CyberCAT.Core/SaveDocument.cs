@@ -69,6 +69,7 @@ public sealed class SaveDocument
             raw.ReadExactly(payload);
             var warnings = new PackageWarnings();
             var trackedFields = new List<TrackedField>();
+            PackageLayout? layout = null;
             if (node.Value.GetType() == typeof(Package))
             {
                 using var packageStream = new MemoryStream(payload, false);
@@ -82,8 +83,9 @@ public sealed class SaveDocument
                     throw new InvalidDataException($"Cannot verify {node.Name}.");
                 node.Value = new Package { Content = buffer.Data! };
                 trackedFields = packageReader.Fields;
+                layout = packageReader.Layout;
             }
-            _snapshots[node] = new(payload, PreservingSaveWriter.SerializePayload(node), warnings.Messages.ToArray(), trackedFields);
+            _snapshots[node] = new(payload, PreservingSaveWriter.SerializePayload(node), warnings.Messages.ToArray(), trackedFields, layout);
         }
     }
 

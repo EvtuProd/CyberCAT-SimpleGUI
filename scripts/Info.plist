@@ -5,8 +5,8 @@
   <key>CFBundleName</key><string>CyberCAT</string>
   <key>CFBundleDisplayName</key><string>CyberCAT</string>
   <key>CFBundleIdentifier</key><string>io.github.evtuprod.cybercat</string>
-  <key>CFBundleVersion</key><string>0.1.0</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>0.1.1</string>
+  <key>CFBundleShortVersionString</key><string>0.1.1</string>
   <key>CFBundleExecutable</key><string>CyberCAT</string>
   <key>CFBundleIconFile</key><string>CyberCAT.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>

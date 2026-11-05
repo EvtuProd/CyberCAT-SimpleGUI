@@ -5,6 +5,7 @@ using WolvenKit.RED4.Save;
 using WolvenKit.RED4.Save.Classes;
 using WolvenKit.RED4.Types;
 using System.Text.Json.Nodes;
+using WolvenKit.RED4.Archive.Buffer;
 
 static void Check(bool value, string message)
 {
@@ -40,6 +41,12 @@ inventory.SubInventories.Add(new SubInventory
         }
     }
 });
+var playerFixture = new PlayerDevelopmentData { OwnerID = new entEntityID { Hash = 1 } };
+playerFixture.DevPoints.Add(new SDevelopmentPoints { Type = Enums.gamedataDevelopmentPointType.Attribute, Unspent = 6 });
+playerFixture.DevPoints.Add(new SDevelopmentPoints { Type = Enums.gamedataDevelopmentPointType.Primary, Spent = 10 });
+playerFixture.DevPoints.Add(new SDevelopmentPoints { Type = Enums.gamedataDevelopmentPointType.Espionage });
+var developmentFixture = new PlayerDevelopmentSystem();
+developmentFixture.PlayerData.Add(playerFixture);
 var fixture = new CyberpunkSaveFile
 {
     FileHeader = new CyberpunkSaveHeaderStruct
@@ -50,7 +57,8 @@ var fixture = new CyberpunkSaveFile
         GameDefPath = "base\\gameplay\\game_definitions\\gamedefault.redgame"
     },
     CompressionSettings = new Compression.Settings { TableEntriesCount = 0x400, ChunkSize = 0x80000 },
-    Nodes = new() { questNode, new NodeEntry { Name = "inventory", Value = inventory } }
+    Nodes = new() { questNode, new NodeEntry { Name = "inventory", Value = inventory },
+        new NodeEntry { Name = "ScriptableSystemsContainer", Value = new Package { Content = new RedPackage { Chunks = new() { developmentFixture } } } } }
 };
 var path = Path.Combine(directory, "synthetic", "sav.dat");
 new SaveDocument(fixture, path).SaveTo(path);
@@ -59,6 +67,8 @@ var document = SaveDocument.Load(path);
 document.SetFact("cybercat_test", 42);
 document.SetFact("cybercat_new_fact", 7);
 document.Inventory!.SubInventories[0].Items[0].Quantity = 123456;
+document.Player!.DevPoints.Single(x => x.Type == Enums.gamedataDevelopmentPointType.Primary).Unspent = 1000;
+document.Player!.DevPoints.Single(x => x.Type == Enums.gamedataDevelopmentPointType.Espionage).Unspent = 500;
 document.MarkChanged();
 Check(document.IsDirty, "Changes mark the document as unsaved");
 var backup = document.SaveTo(path);
@@ -67,6 +77,11 @@ var reread = SaveDocument.Load(path);
 Check(reread.Facts.Single(x => (uint)x.FactName == FNV1A32HashAlgorithm.HashString("cybercat_test")).Value == 42, "Existing fact survives write and re-read");
 Check(reread.Facts.Single(x => (uint)x.FactName == FNV1A32HashAlgorithm.HashString("cybercat_new_fact")).Value == 7, "New fact uses the game's FNV-1a hash");
 Check(reread.Inventory!.SubInventories[0].Items[0].Quantity == 123456, "Inventory edits survive write and re-read");
+Check(reread.Player!.DevPoints.Single(x => x.Type == Enums.gamedataDevelopmentPointType.Primary).Unspent == 1000
+    && reread.Player.DevPoints.Single(x => x.Type == Enums.gamedataDevelopmentPointType.Espionage).Unspent == 500,
+    "Omitted zero-valued point fields can be inserted together without corrupting package offsets");
+Check(reread.Player.DevPoints.Single(x => x.Type == Enums.gamedataDevelopmentPointType.Attribute).Unspent == 6,
+    "Adding omitted point fields preserves neighboring point records");
 Check(!document.IsDirty, "Successful save clears the unsaved flag");
 var beforeFailedWrite = System.IO.File.ReadAllBytes(path);
 var settings = document.File.CompressionSettings.TableEntriesCount;
