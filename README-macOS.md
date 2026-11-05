@@ -17,7 +17,7 @@ Open `sav.dat` inside a save slot. The native Mac game normally stores saves her
 ~/Library/Application Support/CD Projekt Red/Cyberpunk 2077/saves/
 ```
 
-`⌘O` opens a save, `⌘S` writes changes, and `⇧⌘S` saves into another slot folder. **Save as…** copies available `metadata.9.json` and `screenshot.png` into the destination if they are absent, then switches the editor to the new file. To create a separate game slot, use a new `ManualSave-N` folder inside the saves directory.
+`⌘O` opens a save, `⌘S` writes changes, and `⇧⌘S` saves into another slot folder. **Save as…** copies available `metadata.9.json` and `screenshot.png` into the destination if they are absent, then switches the editor to the new file. For a separate game slot, first create another manual save in the game and then select that existing slot folder. A folder created externally may not appear in the running game's save list. After editing, load the chosen slot through **Load Game**; the running character does not update automatically.
 
 Every replacement creates a unique timestamped `.bak` file beside `sav.dat`. Writes use a temporary file in the destination directory; the app re-parses that file before replacing the destination. A save changed by another process since opening is protected from overwrite. Close the game before editing a slot so it cannot overwrite your changes.
 
